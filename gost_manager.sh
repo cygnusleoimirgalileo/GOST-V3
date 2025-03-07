@@ -28,49 +28,9 @@ fi
 # --- Global variables ---
 config_file="/usr/local/bin/gost.yml"
 mode_file="/usr/local/bin/.gost_mode"
-gost_file="/usr/local/bin/gost"
 
 # --- Function Definitions ---
 
-check_gost_file() {
-    if [ ! -f "$gost_file" ]; then
-        echo -e "${YELLOW}GOST file not found in /usr/local/bin. Downloading GOST core...${NC}"
-        download_gost
-    fi
-}
-
-download_gost() {
-    echo -e "${BLUE}Downloading and installing GOST v3...${NC}"
-    # Add your download and extraction logic for GOST here
-    # Replace the URL and extraction steps with actual ones for your GOST version
-    wget -O /tmp/gost_v3.tar.gz "https://example.com/gost_v3.tar.gz" || { echo -e "${RED}Error: Download failed.${NC}"; exit 1; }
-    tar -xvzf /tmp/gost_v3.tar.gz -C /usr/local/bin/ || { echo -e "${RED}Error: Failed to extract GOST archive.${NC}"; exit 1; }
-    chmod +x /usr/local/bin/gost
-    rm -f /tmp/gost_v3.tar.gz
-    echo -e "${GREEN}GOST v3 installed successfully!${NC}"
-}
-
-# Removed the check for server mode change (option 8)
-
-# Function for updating the script and GOST core file
-update_script_and_gost() {
-    echo -e "${BLUE}Updating the GOST manager script...${NC}"
-    wget -O "$0" https://raw.githubusercontent.com/cygnusleoimirgalileo/GOST-V3/main/gost_manager.sh || { echo -e "${RED}Error: Script update failed.${NC}"; exit 1; }
-    chmod +x "$0"
-    echo -e "${GREEN}GOST manager script updated successfully!${NC}"
-    download_gost
-}
-
-# Function for complete uninstallation
-uninstall() {
-    echo -e "${YELLOW}Uninstalling the script and all related files...${NC}"
-    rm -f "$gost_file" "$config_file" "$mode_file" "/etc/systemd/system/gost.service"
-    systemctl daemon-reload
-    echo -e "${GREEN}Uninstallation complete.${NC}"
-    exit 0
-}
-
-# --- Function Definitions Continued ---
 check_first_run() {
     if [ ! -f "$mode_file" ]; then
         echo -e "${YELLOW}Is this server Foreign or Domestic?${NC}"
@@ -434,9 +394,8 @@ while true; do
     echo -e "${CYAN}5.${NC} Start GOST service"
     echo -e "${CYAN}6.${NC} Restart GOST service"
     echo -e "${CYAN}7.${NC} Stop GOST service"
-    echo -e "${CYAN}8.${NC} Update script and GOST core"
-    echo -e "${CYAN}9.${NC} Complete Uninstall"
-    echo -e "${CYAN}10.${NC} Exit"
+    echo -e "${CYAN}8.${NC} Change server mode (current: ${SERVER_MODE^})"
+    echo -e "${CYAN}9.${NC} Exit"
     echo
     read -p "Choose an option: " choice
     case "$choice" in
@@ -447,9 +406,27 @@ while true; do
         5) start_service ;;
         6) restart_service ;;
         7) stop_service ;;
-        8) update_script_and_gost ;;
-        9) uninstall ;;
-        10) echo -e "${GREEN}Exiting...${NC}"; exit 0 ;;
+        8)
+            echo -e "${YELLOW}Change server mode from '${SERVER_MODE^}' to:"
+            if [ "$SERVER_MODE" == "foreign" ]; then
+                echo -e "${CYAN}d${NC} - Domestic"
+            else
+                echo -e "${CYAN}f${NC} - Foreign"
+            fi
+            read -p "Enter your choice: " mode_switch
+            if [ "$SERVER_MODE" == "foreign" ] && [[ "$mode_switch" =~ ^[Dd] ]]; then
+                SERVER_MODE="domestic"
+                echo "$SERVER_MODE" > "$mode_file"
+                echo -e "${GREEN}Mode changed to: Domestic${NC}"
+            elif [ "$SERVER_MODE" == "domestic" ] && [[ "$mode_switch" =~ ^[Ff] ]]; then
+                SERVER_MODE="foreign"
+                echo "$SERVER_MODE" > "$mode_file"
+                echo -e "${GREEN}Mode changed to: Foreign${NC}"
+            else
+                echo -e "${YELLOW}Mode not changed.${NC}"
+            fi
+            ;;
+        9) echo -e "${GREEN}Exiting...${NC}"; exit 0 ;;
         *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
     esac
     echo
