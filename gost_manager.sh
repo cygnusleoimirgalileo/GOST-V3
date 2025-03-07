@@ -372,15 +372,15 @@ if [ "$is_first_run" -eq 0 ]; then
     create_service_file
     start_service
 
-    # Create shortcut 'gost' for running the script
-    shortcut_path="/usr/local/bin/gost"
-    script_path="$(realpath "$0")"  # Get the full path of the current script
-    if [ ! -f "$shortcut_path" ]; then
-        echo -e "${BLUE}Creating shortcut 'gost' to run this script...${NC}"
-        ln -sf "$script_path" "$shortcut_path"
-        chmod +x "$shortcut_path"
-        echo -e "${GREEN}Shortcut 'gost' created! Run with 'sudo gost' in the future.${NC}"
-    fi
+    # Inside the 'if [ "$is_first_run" -eq 0 ]' block
+shortcut_path="/usr/local/bin/gost-manager"
+script_path="$(realpath "$0")"
+if [ ! -f "$shortcut_path" ]; then
+    echo "Creating shortcut 'gost-manager' to run this script..."
+    sudo ln -sf "$script_path" "$shortcut_path"
+    sudo chmod +x "$shortcut_path"
+    echo "Shortcut 'gost-manager' created! Run with 'sudo gost-manager' in the future."
+fi
 fi
 
 # --- Management Menu ---
