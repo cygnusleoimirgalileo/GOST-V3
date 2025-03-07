@@ -18,18 +18,6 @@ fi
 # --- Global variables ---
 config_file="/usr/local/bin/gost.yml"
 mode_file="/usr/local/bin/.gost_mode"
-install_dir="/usr/local/bin"
-script_name="gost_manager.sh"
-script_path="$install_dir/$script_name"
-
-# --- Check if script needs to install itself ---
-if [ "$0" != "$script_path" ]; then
-    echo -e "${BLUE}Installing GOST manager script...${NC}"
-    cp "$0" "$script_path"
-    chmod +x "$script_path"
-    echo -e "${GREEN}GOST manager script installed! Run it with 'sudo /usr/local/bin/gost_manager.sh'.${NC}"
-    exit 0
-fi
 
 # --- Function Definitions ---
 
