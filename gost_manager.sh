@@ -367,6 +367,56 @@ uninstall() {
     fi
 }
 
+edit_yaml() {
+    config_file="/usr/local/bin/gost.yml"
+    if [ ! -f "$config_file" ]; then
+        echo -e "${YELLOW}Configuration file not found. Creating an empty one.${NC}"
+        echo "services: []" > "$config_file"
+    fi
+    nano "$config_file"
+    echo -e "${GREEN}YAML file editing complete.${NC}"
+}
+
+switch_mode() {
+    mode_file="/usr/local/bin/.gost_mode"
+    [ -z "$SERVER_MODE" ] && SERVER_MODE=$(cat "$mode_file" 2>/dev/null || echo "foreign")
+    
+    echo -e "${YELLOW}Current server mode: ${SERVER_MODE^}${NC}"
+    echo -e "${YELLOW}Available modes:${NC}"
+    echo -e "${CYAN}  1. Foreign - Forwards services to localhost${NC}"
+    echo -e "${CYAN}  2. Domestic - Forwards services to a foreign server${NC}"
+    echo -e "${YELLOW}Enter the new mode (1 for Foreign, 2 for Domestic): ${NC}"
+    read -p "Choice: " mode_choice
+    
+    case "$mode_choice" in
+        1)
+            SERVER_MODE="foreign"
+            echo "$SERVER_MODE" > "$mode_file"
+            echo -e "${GREEN}Mode switched to: Foreign${NC}"
+            echo -e "${YELLOW}Note: No additional variables required for Foreign mode.${NC}"
+            ;;
+        2)
+            echo -e "${YELLOW}Switching to Domestic mode requires foreign server details.${NC}"
+            read -p "Enter the foreign server's IPv6 address: " foreign_ipv6
+            read -p "Enter the foreign server's port: " foreign_port
+            if [ -z "$foreign_ipv6" ] || [ -z "$foreign_port" ]; then
+                echo -e "${RED}Error: IPv6 address and port are required for Domestic mode.${NC}"
+                return 1
+            fi
+            SERVER_MODE="domestic"
+            echo "$SERVER_MODE" > "$mode_file"
+            echo -e "${GREEN}Mode switched to: Domestic${NC}"
+            echo -e "${YELLOW}Foreign server set to: [$foreign_ipv6]:$foreign_port${NC}"
+            echo -e "${YELLOW}Note: New services will use these details when added.${NC}"
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Mode switch cancelled.${NC}"
+            return 1
+            ;;
+    esac
+    echo -e "${YELLOW}Existing services remain unchanged. New services will follow the new mode.${NC}"
+}
+
 # --- First Run Setup ---
 check_first_run
 is_first_run=$?
@@ -444,9 +494,11 @@ while true; do
     echo -e "${CYAN}5.${NC} Start GOST service"
     echo -e "${CYAN}6.${NC} Restart GOST service"
     echo -e "${CYAN}7.${NC} Stop GOST service"
-    echo -e "${CYAN}8.${NC} Update Script and GOST"
-    echo -e "${CYAN}9.${NC} Uninstall"
-    echo -e "${CYAN}10.${NC} Exit"
+    echo -e "${CYAN}8.${NC} Edit YAML file with nano"
+    echo -e "${CYAN}9.${NC} Switch Mode"
+    echo -e "${CYAN}10.${NC} Update Script and GOST"
+    echo -e "${CYAN}11.${NC} Uninstall"
+    echo -e "${CYAN}12.${NC} Exit"
     echo
     read -p "Choose an option: " choice
     case "$choice" in
@@ -457,9 +509,11 @@ while true; do
         5) start_service ;;
         6) restart_service ;;
         7) stop_service ;;
-        8) update_script_and_gost ;;
-        9) uninstall ;;
-        10) echo -e "${GREEN}Exiting...${NC}"; exit 0 ;;
+        8) edit_yaml ;;
+        9) switch_mode ;;
+        10) update_script_and_gost ;;
+        11) uninstall ;;
+        12) echo -e "${GREEN}Exiting...${NC}"; exit 0 ;;
         *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
     esac
     echo
