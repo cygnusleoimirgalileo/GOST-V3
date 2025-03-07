@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Check if the script is running interactively
+if [[ -t 0 ]]; then
+    # Interactive shell, proceed
+    :
+else
+    echo -e "${RED}Error: This script must be run interactively. Please download it and run with 'sudo bash gost_manager.sh'${NC}"
+    echo -e "${BLUE}Download command: wget -O gost_manager.sh https://raw.githubusercontent.com/cygnusleoimirgalileo/GOST-V3/main/gost_manager.sh${NC}"
+    exit 1
+fi
 # --- Colors for better visual presentation ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
