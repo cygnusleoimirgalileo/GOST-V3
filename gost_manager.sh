@@ -289,6 +289,84 @@ show_header() {
     echo
 }
 
+install_gost() {
+    echo -e "${BLUE}Downloading and installing GOST v3...${NC}"
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64)
+            asset_pattern="linux_amd64.tar.gz"
+            ;;
+        aarch64)
+            asset_pattern="linux_arm64.tar.gz"
+            ;;
+        armv7l)
+            asset_pattern="linux_arm.tar.gz"
+            ;;
+        *)
+            asset_pattern="linux_amd64.tar.gz"
+            ;;
+    esac
+    download_url=$(curl -s https://api.github.com/repos/go-gost/gost/releases | \
+        grep -oP '"browser_download_url": "\K(.*?'"$asset_pattern"')(?=")' | \
+        grep -E 'v3\.' | head -n 1)
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}Error: Could not find a GOST v3 pre-release for $asset_pattern.${NC}"
+        exit 1
+    fi
+    wget -O /tmp/gost_v3.tar.gz "$download_url" || { echo -e "${RED}Error: Download failed.${NC}"; exit 1; }
+    tar -xvzf /tmp/gost_v3.tar.gz -C /usr/local/bin/ || { echo -e "${RED}Error: Failed to extract GOST archive.${NC}"; exit 1; }
+    chmod +x /usr/local/bin/gost
+    rm -f /tmp/gost_v3.tar.gz
+    echo -e "${GREEN}GOST v3 installed successfully!${NC}"
+}
+
+check_and_install_gost() {
+    if ! [ -x "/usr/local/bin/gost" ]; then
+        echo -e "${YELLOW}GOST binary not found or not executable. Reinstalling...${NC}"
+        install_gost
+    fi
+}
+
+update_script_and_gost() {
+    echo -e "${BLUE}Updating script and GOST...${NC}"
+    # Update the script
+    script_path="/usr/local/bin/gost_manager.sh"
+    wget -O /tmp/gost_manager.sh https://raw.githubusercontent.com/cygnusleoimirgalileo/GOST-V3/main/gost_manager.sh
+    if [ -f /tmp/gost_manager.sh ]; then
+        mv /tmp/gost_manager.sh "$script_path"
+        chmod +x "$script_path"
+        echo -e "${GREEN}Script updated successfully!${NC}"
+    else
+        echo -e "${RED}Failed to update script.${NC}"
+    fi
+    # Update GOST
+    install_gost
+}
+
+uninstall() {
+    echo -e "${YELLOW}Are you sure you want to uninstall GOST and all related files? (y/N)${NC}"
+    read -p "Confirm: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Stopping and disabling GOST service...${NC}"
+        systemctl stop gost.service 2>/dev/null
+        systemctl disable gost.service 2>/dev/null
+        rm -f /etc/systemd/system/gost.service
+        systemctl daemon-reload
+        echo -e "${BLUE}Removing GOST binary and configuration files...${NC}"
+        rm -f /usr/local/bin/gost
+        rm -f /usr/local/bin/gost.yml
+        rm -f /usr/local/bin/.gost_mode
+        rm -f /usr/local/bin/gost-manager
+        echo -e "${BLUE}Removing script...${NC}"
+        script_path="/usr/local/bin/gost_manager.sh"
+        rm -f "$script_path"
+        echo -e "${GREEN}Uninstallation complete. The script will now exit.${NC}"
+        exit 0
+    else
+        echo -e "${YELLOW}Uninstallation cancelled.${NC}"
+    fi
+}
+
 # --- First Run Setup ---
 check_first_run
 is_first_run=$?
@@ -310,38 +388,9 @@ if [ "$is_first_run" -eq 0 ]; then
         chmod +x /usr/bin/yq
     fi
 
-    # Detect architecture and choose correct asset
-    arch=$(uname -m)
-    case "$arch" in
-        x86_64)
-            asset_pattern="linux_amd64.tar.gz"
-            ;;
-        aarch64)
-            asset_pattern="linux_arm64.tar.gz"
-            ;;
-        armv7l)
-            asset_pattern="linux_arm.tar.gz"
-            ;;
-        *)
-            asset_pattern="linux_amd64.tar.gz"
-            ;;
-    esac
-
     # Install GOST v3 if not already installed
     if ! command -v /usr/local/bin/gost &>/dev/null || ! /usr/local/bin/gost -V | grep -q "3\."; then
-        echo -e "${BLUE}Downloading and installing GOST v3...${NC}"
-        download_url=$(curl -s https://api.github.com/repos/go-gost/gost/releases | \
-            grep -oP '"browser_download_url": "\K(.*?'"$asset_pattern"')(?=")' | \
-            grep -E 'v3\.' | head -n 1)
-        if [ -z "$download_url" ]; then
-            echo -e "${RED}Error: Could not find a GOST v3 pre-release for $asset_pattern.${NC}"
-            exit 1
-        fi
-        wget -O /tmp/gost_v3.tar.gz "$download_url" || { echo -e "${RED}Error: Download failed.${NC}"; exit 1; }
-        tar -xvzf /tmp/gost_v3.tar.gz -C /usr/local/bin/ || { echo -e "${RED}Error: Failed to extract GOST archive.${NC}"; exit 1; }
-        chmod +x /usr/local/bin/gost
-        rm -f /tmp/gost_v3.tar.gz
-        echo -e "${GREEN}GOST v3 installed successfully!${NC}"
+        install_gost
     else
         echo -e "${GREEN}GOST v3 is already installed.${NC}"
     fi
@@ -372,19 +421,20 @@ if [ "$is_first_run" -eq 0 ]; then
     create_service_file
     start_service
 
-    # Inside the 'if [ "$is_first_run" -eq 0 ]' block
-shortcut_path="/usr/local/bin/gost-manager"
-script_path="$(realpath "$0")"
-if [ ! -f "$shortcut_path" ]; then
-    echo "Creating shortcut 'gost-manager' to run this script..."
-    sudo ln -sf "$script_path" "$shortcut_path"
-    sudo chmod +x "$shortcut_path"
-    echo "Shortcut 'gost-manager' created! Run with 'sudo gost-manager' in the future."
-fi
+    # Create shortcut 'gost-manager' for running the script
+    shortcut_path="/usr/local/bin/gost-manager"
+    script_path="$(realpath "$0")"
+    if [ ! -f "$shortcut_path" ]; then
+        echo -e "${BLUE}Creating shortcut 'gost-manager' to run this script...${NC}"
+        ln -sf "$script_path" "$shortcut_path"
+        chmod +x "$shortcut_path"
+        echo -e "${GREEN}Shortcut 'gost-manager' created! Run with 'sudo gost-manager' in the future.${NC}"
+    fi
 fi
 
 # --- Management Menu ---
 while true; do
+    check_and_install_gost
     show_header
     echo -e "${YELLOW}=== Management Menu ===${NC}"
     echo -e "${CYAN}1.${NC} Display services"
@@ -394,8 +444,9 @@ while true; do
     echo -e "${CYAN}5.${NC} Start GOST service"
     echo -e "${CYAN}6.${NC} Restart GOST service"
     echo -e "${CYAN}7.${NC} Stop GOST service"
-    echo -e "${CYAN}8.${NC} Change server mode (current: ${SERVER_MODE^})"
-    echo -e "${CYAN}9.${NC} Exit"
+    echo -e "${CYAN}8.${NC} Update Script and GOST"
+    echo -e "${CYAN}9.${NC} Uninstall"
+    echo -e "${CYAN}10.${NC} Exit"
     echo
     read -p "Choose an option: " choice
     case "$choice" in
@@ -406,27 +457,9 @@ while true; do
         5) start_service ;;
         6) restart_service ;;
         7) stop_service ;;
-        8)
-            echo -e "${YELLOW}Change server mode from '${SERVER_MODE^}' to:"
-            if [ "$SERVER_MODE" == "foreign" ]; then
-                echo -e "${CYAN}d${NC} - Domestic"
-            else
-                echo -e "${CYAN}f${NC} - Foreign"
-            fi
-            read -p "Enter your choice: " mode_switch
-            if [ "$SERVER_MODE" == "foreign" ] && [[ "$mode_switch" =~ ^[Dd] ]]; then
-                SERVER_MODE="domestic"
-                echo "$SERVER_MODE" > "$mode_file"
-                echo -e "${GREEN}Mode changed to: Domestic${NC}"
-            elif [ "$SERVER_MODE" == "domestic" ] && [[ "$mode_switch" =~ ^[Ff] ]]; then
-                SERVER_MODE="foreign"
-                echo "$SERVER_MODE" > "$mode_file"
-                echo -e "${GREEN}Mode changed to: Foreign${NC}"
-            else
-                echo -e "${YELLOW}Mode not changed.${NC}"
-            fi
-            ;;
-        9) echo -e "${GREEN}Exiting...${NC}"; exit 0 ;;
+        8) update_script_and_gost ;;
+        9) uninstall ;;
+        10) echo -e "${GREEN}Exiting...${NC}"; exit 0 ;;
         *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
     esac
     echo
