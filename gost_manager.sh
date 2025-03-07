@@ -135,9 +135,14 @@ EOFX
         echo -e "${CYAN}Adding a new service for Domestic mode...${NC}"
         read -p "Enter service name: " name
         read -p "Enter listening port (e.g., 8585): " listen_port
-        read -p "Enter foreign server IPv6 address (without brackets): " foreign_ipv6
+        read -p "Enter foreign server IP address (IPv4 or IPv6): " foreign_ip
         read -p "Enter destination port (for forwarding) (e.g., 8585): " dest_port
-        dest_addr="[${foreign_ipv6}]:${dest_port}"
+        # Format the destination address based on IP type
+        if echo "$foreign_ip" | grep -q ":"; then
+            dest_addr="[${foreign_ip}]:${dest_port}"
+        else
+            dest_addr="${foreign_ip}:${dest_port}"
+        fi
         tmp_file=$(mktemp)
         cat > "$tmp_file" << EOFX
 services:
@@ -198,9 +203,13 @@ edit_service() {
                     /usr/bin/yq eval -i '(.services[] | select(.name == "'"$name"'")).forwarder.nodes[0].addr = "localhost:'"$redirect_port"'"' "$config_file"
                 else
                     read -p "Enter new listening port (e.g., 8585): " listen_port
-                    read -p "Enter new foreign server IPv6 address (without brackets): " foreign_ipv6
+                    read -p "Enter new foreign server IP address (IPv4 or IPv6): " foreign_ip
                     read -p "Enter new destination port (for forwarding) (e.g., 8585): " dest_port
-                    dest_addr="[${foreign_ipv6}]:${dest_port}"
+                    if echo "$foreign_ip" | grep -q ":"; then
+                        dest_addr="[${foreign_ip}]:${dest_port}"
+                    else
+                        dest_addr="${foreign_ip}:${dest_port}"
+                    fi
                     /usr/bin/yq eval -i '(.services[] | select(.name == "'"$name"'")).addr = ":'"$listen_port"'"' "$config_file"
                     /usr/bin/yq eval -i '(.services[] | select(.name == "'"$name"'")).forwarder.nodes[0].addr = "'"$dest_addr"'"' "$config_file"
                 fi
@@ -397,24 +406,29 @@ switch_mode() {
             ;;
         2)
             echo -e "${YELLOW}Switching to Domestic mode requires foreign server details.${NC}"
-            read -p "Enter the foreign server's IPv6 address: " foreign_ipv6
+            read -p "Enter the foreign server's IP address (IPv4 or IPv6): " foreign_ip
             read -p "Enter the foreign server's port: " foreign_port
-            if [ -z "$foreign_ipv6" ] || [ -z "$foreign_port" ]; then
-                echo -e "${RED}Error: IPv6 address and port are required for Domestic mode.${NC}"
+            if [ -z "$foreign_ip" ] || [ -z "$foreign_port" ]; then
+                echo -e "${RED}Error: IP address and port are required for Domestic mode.${NC}"
                 return 1
             fi
             SERVER_MODE="domestic"
             echo "$SERVER_MODE" > "$mode_file"
             echo -e "${GREEN}Mode switched to: Domestic${NC}"
-            echo -e "${YELLOW}Foreign server set to: [$foreign_ipv6]:$foreign_port${NC}"
-            echo -e "${YELLOW}Note: New services will use these details when added.${NC}"
+            echo -e "${YELLOW}Foreign server set to: $foreign_ip:$foreign_port${NC}"
             ;;
         *)
             echo -e "${RED}Invalid choice. Mode switch cancelled.${NC}"
             return 1
             ;;
     esac
-    echo -e "${YELLOW}Existing services remain unchanged. New services will follow the new mode.${NC}"
+    
+    # Clear all existing services in gost.yml
+    if [ -f "$config_file" ]; then
+        echo "services: []" > "$config_file"
+        echo -e "${YELLOW}All existing services have been removed due to mode switch.${NC}"
+    fi
+    echo -e "${YELLOW}New services will follow the new mode.${NC}"
 }
 
 # --- First Run Setup ---
